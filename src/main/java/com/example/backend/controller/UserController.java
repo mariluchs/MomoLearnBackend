@@ -1,28 +1,30 @@
 package com.example.backend.controller;
 
-import com.example.backend.model.User;
-import com.example.backend.repository.UserRepository;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/v1/users")
+@RequestMapping("/api/users")
 public class UserController {
+    private final UserRepository userRepo;
 
-    private final UserRepository repository;
-
-    public UserController(UserRepository repository) {
-        this.repository = repository;
+    public UserController(UserRepository userRepo) {
+        this.userRepo = userRepo;
     }
 
     @GetMapping
-    public List<User> getAllUsers() {
-        return repository.findAll();
+    public List<User> getAll() {
+        return userRepo.findAll();
     }
 
     @PostMapping
-    public User createUser(@RequestBody User user) {
-        return repository.save(user);
+    public User create(@RequestBody User user) {
+        return userRepo.save(user);
+    }
+
+    @DeleteMapping("/{id}")
+    public void delete(@PathVariable String id) {
+        userRepo.deleteById(id);
     }
 }
