@@ -1,10 +1,13 @@
-package com.example.backend;
+package com.example.MomoLearn;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 
 @SpringBootTest
-class BackendApplicationTests {
-    @Test
-    void contextLoads() {}
+class MomoLearnApplicationTests {
+
+	@Test
+	void contextLoads() {
+	}
+
 }
