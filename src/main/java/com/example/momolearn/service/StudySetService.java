@@ -5,7 +5,6 @@ import com.example.momolearn.repository.*;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
-
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -21,12 +20,12 @@ public class StudySetService {
   private final UploadRepository uploads;
   private final UploadService uploadService;
   private final PdfTextService pdfText;
-  private final QuestionGenerator generator;
+  private final AiQuestionGenerator generator; // <-- direkt unser DeepSeek-Generator
   private final QuestionRepository questions;
 
   public StudySetService(StudySetRepository sets, CourseRepository courses,
                          UploadRepository uploads, UploadService uploadService,
-                         PdfTextService pdfText, QuestionGenerator generator,
+                         PdfTextService pdfText, AiQuestionGenerator generator,
                          QuestionRepository questions) {
     this.sets = sets;
     this.courses = courses;
@@ -70,7 +69,7 @@ public class StudySetService {
         new ResponseStatusException(HttpStatus.NOT_FOUND, "StudySet not found"));
   }
 
-   public List<StudySet> list(String userId, String courseId) {
+  public List<StudySet> list(String userId, String courseId) {
     return sets.findAllByUserIdAndCourseId(userId, courseId);
   }
 
@@ -84,16 +83,18 @@ public class StudySetService {
   }
 
   public void delete(String userId, String courseId, String setId) {
-    // 404, wenn nicht vorhanden oder nicht zu User/Course gehörend
     StudySet s = getForUserCourse(userId, courseId, setId);
     sets.deleteById(s.getId());
   }
 
   public Page<StudySet> pageByUserAndCourse(String userId, String courseId, Pageable pageable) {
     return sets.findByUserIdAndCourseId(userId, courseId, pageable);
-}
+  }
 
-  public int generateQuestions(String userId, String setId, int count) {
+  /**
+   * Startet die KI-Generierung ohne feste Anzahl – die KI entscheidet selbst.
+   */
+  public int generateQuestions(String userId, String setId) {
     StudySet set = get(setId);
     if (!userId.equals(set.getUserId()))
       throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Set does not belong to user");
@@ -105,12 +106,12 @@ public class StudySetService {
 
     try (InputStream in = uploadService.openStream(up)) {
       String text = pdfText.extractText(in);
-      questions.deleteByStudySetId(setId); // alte Fragen (falls vorhanden) überschreiben
-      var qs = generator.generate(setId, text, Math.max(1, count));
-      questions.saveAll(qs);
+      questions.deleteByStudySetId(set.getId()); // bestehende Fragen überschreiben
+      var generated = generator.generateDecideCount(set.getId(), text);
+      questions.saveAll(generated);
       set.setStatus(StudySet.Status.READY);
       sets.save(set);
-      return qs.size();
+      return generated.size();
     } catch (Exception e) {
       set.setStatus(StudySet.Status.FAILED);
       sets.save(set);
