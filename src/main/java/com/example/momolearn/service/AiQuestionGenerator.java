@@ -37,7 +37,7 @@ public class AiQuestionGenerator {
       @Value("${deepseek.api.model:deepseek-chat}") String model,
       @Value("${deepseek.timeout-ms:90000}") int timeoutMs,
       @Value("${deepseek.prompt.clip-chars:8000}") int clipChars,
-      @Value("${deepseek.max-tokens:1200}") int maxTokens
+      @Value("${deepseek.max-tokens:2500}") int maxTokens
   ) {
     if (apiKey == null || apiKey.isBlank()) {
       throw new IllegalStateException("DeepSeek API-Key fehlt. Setze ENV DEEPSEEK_API_KEY oder Property deepseek.api.key.");
@@ -70,7 +70,7 @@ public class AiQuestionGenerator {
         Anforderungen:
         - Antworte AUSSCHLIESSLICH als JSON-Objekt mit dem Feld "questions" (keine Erklärtexte außerhalb von JSON).
         - Jede Frage: { "stem": string, "choices": string[4], "correctIndex": 0-3, "explanation": string? }.
-        - Erstelle so viele Fragen, wie fachlich sinnvoll (typisch 5–20), keine Duplikate.
+        - Erstelle so viele Fragen, wie fachlich sinnvoll sind keine Duplikate.
         - Nutze klare, prägnante Antworten; genau eine richtige Lösung.
         """;
 
