@@ -72,8 +72,6 @@ public class AiQuestionGenerator {
         - Jede Frage: { "stem": string, "choices": string[4], "correctIndex": 0-3, "explanation": string? }.
         - Erstelle so viele Fragen, wie fachlich sinnvoll (typisch 5–20), keine Duplikate.
         - Nutze klare, prägnante Antworten; genau eine richtige Lösung.
-        - Variiere die Position der richtigen Antwort (0-3).
-        - Stelle sicher, dass jeder relevante Aspekt des Textes abgefragt wird.
         """;
 
     String user = """
