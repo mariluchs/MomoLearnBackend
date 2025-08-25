@@ -1,13 +1,20 @@
 package com.example.momolearn.model;
 
-import jakarta.validation.constraints.Email;
-import jakarta.validation.constraints.NotBlank;
-import lombok.*;
+import java.time.Instant;
+
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
-import java.time.Instant;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Document("users")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
@@ -23,6 +30,10 @@ public class User {
   private String email;
 
   private Instant createdAt;
+
+  /** Gespeicherter Passwort-Hash (BCrypt). Wird NICHT serialisiert. */
+  @JsonIgnore
+  private String passwordHash;
 
   // --- Gamification ---
   @Builder.Default

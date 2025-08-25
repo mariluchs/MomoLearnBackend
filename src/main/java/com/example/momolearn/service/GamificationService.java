@@ -1,5 +1,13 @@
 package com.example.momolearn.service;
 
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
+
 import com.example.momolearn.dto.AttemptResultDto;
 import com.example.momolearn.dto.UserStatsDto;
 import com.example.momolearn.model.AnswerAttempt;
@@ -8,11 +16,6 @@ import com.example.momolearn.model.User;
 import com.example.momolearn.repository.AnswerAttemptRepository;
 import com.example.momolearn.repository.QuestionRepository;
 import com.example.momolearn.repository.UserRepository;
-import org.springframework.http.HttpStatus;
-import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
-
-import java.time.Instant;
 
 @Service
 public class GamificationService {
@@ -42,39 +45,56 @@ public class GamificationService {
 
     boolean correct = (chosenIndex == q.getCorrectIndex());
 
+    // === Tagesbasierte Streak-Logik (UTC) ===
+    Instant now = Instant.now();
+    LocalDate today = LocalDate.now(ZoneOffset.UTC);
+    LocalDate lastDay = (u.getLastAnswerAt() == null)
+        ? null
+        : u.getLastAnswerAt().atOffset(ZoneOffset.UTC).toLocalDate();
+
+    int newStreak = u.getStreak();
+    if (lastDay == null) {
+      // Erster Versuch überhaupt -> Streak startet bei 1
+      newStreak = 1;
+    } else if (lastDay.isEqual(today)) {
+      // Heute schon gespielt -> Streak bleibt unverändert
+      newStreak = u.getStreak();
+    } else if (lastDay.plusDays(1).isEqual(today)) {
+      // Genau gestern aktiv -> +1
+      newStreak = u.getStreak() + 1;
+    } else {
+      // Mindestens einen Tag ausgelassen -> Reset und heute neu starten
+      newStreak = 1;
+    }
+
     // --- XP/Level/Streak Regeln ---
     int base = correct ? 10 : 0;
-    int bonus = correct ? Math.min(u.getStreak(), 5) : 0; // kleiner Bonus je Streak, max 5
+    int bonus = correct ? Math.min(newStreak, 5) : 0; // kleiner Bonus je Tages-Streak, max 5
     int xpAwarded = base + bonus;
 
-    // Streak aktualisieren
-    if (correct) {
-      u.setStreak(u.getStreak() + 1);
-    } else {
-      u.setStreak(0);
-    }
-    u.setLastAnswerAt(Instant.now());
-
     // XP & Level
-    int newXp = u.getXp() + xpAwarded;
+    int accumulatedXp = u.getXp() + xpAwarded;
     int newLevel = u.getLevel();
-    while (newXp >= xpNeededForNext(newLevel)) {
-      newXp -= xpNeededForNext(newLevel);
+    while (accumulatedXp >= xpNeededForNext(newLevel)) {
+      accumulatedXp -= xpNeededForNext(newLevel);
       newLevel++;
     }
-    u.setXp(newXp);
-    u.setLevel(newLevel);
 
+    // User speichern
+    u.setStreak(newStreak);
+    u.setLastAnswerAt(now);
+    u.setXp(accumulatedXp);
+    u.setLevel(newLevel);
     users.save(u);
 
-    // Attempt speichern
+    // Attempt speichern (Audit)
     attempts.save(AnswerAttempt.builder()
         .userId(userId)
         .questionId(questionId)
         .chosenIndex(chosenIndex)
         .correct(correct)
         .scoredXp(xpAwarded)
-        .createdAt(Instant.now())
+        .createdAt(now)
         .build());
 
     return AttemptResultDto.builder()
