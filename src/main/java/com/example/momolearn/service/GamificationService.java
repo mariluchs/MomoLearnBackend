@@ -32,62 +32,79 @@ public class GamificationService {
     this.attempts = attempts;
   }
 
+  /**
+   * Verarbeitet einen Antwortversuch eines Nutzers:
+   * - Prüft, ob Nutzer und Frage existieren
+   * - Berechnet XP, Level und Streak
+   * - Speichert den Versuch in der Datenbank
+   * - Aktualisiert die Nutzerstatistiken
+   *
+   * @param userId       ID des Nutzers
+   * @param questionId   ID der Frage
+   * @param chosenIndex  Gewählter Antwortindex (0..3)
+   * @return Ergebnis mit Informationen für das Frontend
+   */
   public AttemptResultDto recordAttempt(String userId, String questionId, int chosenIndex) {
+    // --- 1) Nutzer prüfen ---
     User u = users.findById(userId)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
 
+    // --- 2) Frage prüfen ---
     Question q = questions.findById(questionId)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Question not found"));
 
+    // --- 3) Validierung des Antwort-Index ---
     if (chosenIndex < 0 || chosenIndex > 3) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "chosenIndex must be 0..3");
     }
 
+    // --- 4) Korrektheit prüfen ---
     boolean correct = (chosenIndex == q.getCorrectIndex());
 
-    // === Tagesbasierte Streak-Logik (UTC) ===
+    // --- 5) Streak-Logik (basierend auf UTC-Datum) ---
     Instant now = Instant.now();
     LocalDate today = LocalDate.now(ZoneOffset.UTC);
     LocalDate lastDay = (u.getLastAnswerAt() == null)
         ? null
         : u.getLastAnswerAt().atOffset(ZoneOffset.UTC).toLocalDate();
 
-    int newStreak = u.getStreak();
+    int newStreak;
     if (lastDay == null) {
-      // Erster Versuch überhaupt -> Streak startet bei 1
+      // Erster Versuch → Streak startet bei 1
       newStreak = 1;
     } else if (lastDay.isEqual(today)) {
-      // Heute schon gespielt -> Streak bleibt unverändert
+      // Schon heute aktiv → Streak bleibt gleich
       newStreak = u.getStreak();
     } else if (lastDay.plusDays(1).isEqual(today)) {
-      // Genau gestern aktiv -> +1
+      // Gestern aktiv → Streak +1
       newStreak = u.getStreak() + 1;
     } else {
-      // Mindestens einen Tag ausgelassen -> Reset und heute neu starten
+      // Pause → Streak-Reset
       newStreak = 1;
     }
 
-    // --- XP/Level/Streak Regeln ---
-    int base = correct ? 10 : 0;
-    int bonus = correct ? Math.min(newStreak, 5) : 0; // kleiner Bonus je Tages-Streak, max 5
+    // --- 6) XP- und Level-Berechnung ---
+    int base = correct ? 10 : 0;                    // Grund-XP für richtige Antwort
+    int bonus = correct ? Math.min(newStreak, 5) : 0; // Bonus je Tages-Streak (max +5)
     int xpAwarded = base + bonus;
 
-    // XP & Level
     int accumulatedXp = u.getXp() + xpAwarded;
     int newLevel = u.getLevel();
+
+    // Levelaufstieg: alle 100 XP
     while (accumulatedXp >= xpNeededForNext(newLevel)) {
       accumulatedXp -= xpNeededForNext(newLevel);
       newLevel++;
     }
 
-    // User speichern
+    // --- 7) Nutzer aktualisieren ---
     u.setStreak(newStreak);
     u.setLastAnswerAt(now);
     u.setXp(accumulatedXp);
     u.setLevel(newLevel);
     users.save(u);
 
-    // Attempt speichern (Audit)
+    // --- 8) Versuch speichern ---
     attempts.save(AnswerAttempt.builder()
         .userId(userId)
         .questionId(questionId)
@@ -97,6 +114,7 @@ public class GamificationService {
         .createdAt(now)
         .build());
 
+    // --- 9) Ergebnis zurückgeben ---
     return AttemptResultDto.builder()
         .correct(correct)
         .xpAwarded(xpAwarded)
@@ -106,6 +124,14 @@ public class GamificationService {
         .build();
   }
 
+  /**
+   * Gibt die aktuellen Statistiken eines Nutzers zurück:
+   * - XP, Level, Streak
+   * - Anzahl der korrekt beantworteten Fragen
+   *
+   * @param userId ID des Nutzers
+   * @return UserStatsDto mit den aktuellen Werten
+   */
   public UserStatsDto stats(String userId) {
     User u = users.findById(userId)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
@@ -120,7 +146,13 @@ public class GamificationService {
         .build();
   }
 
-  // einfache Levelkurve: 100 XP je Level
+  /**
+   * Gibt die benötigte XP-Menge für den nächsten Levelaufstieg zurück.
+   * Aktuell ist die Levelkurve linear: 100 XP je Level.
+   *
+   * @param level Aktuelles Level
+   * @return XP-Bedarf für das nächste Level
+   */
   private int xpNeededForNext(int level) {
     return 100;
   }
